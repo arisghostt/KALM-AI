@@ -131,7 +131,7 @@ export default function TechnicianView({ lang, exams, onStatusChange }: Technici
   const [selectedFrVoiceURI, setSelectedFrVoiceURI] = useState<string>('');
   const [selectedEnVoiceURI, setSelectedEnVoiceURI] = useState<string>('');
   const [announcementPitch, setAnnouncementPitch] = useState<number>(1.0); // reassure frequency (0.5 to 2)
-  const [announcementRate, setAnnouncementRate] = useState<number>(1.25);   // steady, calm pacing speed (0.5 to 2)
+  const [announcementRate, setAnnouncementRate] = useState<number>(1.0);   // steady, calm pacing speed (0.5 to 2)
 
   // Tracking HTML5 Audio streams for Neural engine to manage overlapping or consecutive dual-language calls
   const activeAudioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -658,7 +658,7 @@ ${urgencyWarning}
       const response = await fetch('/api/gemini/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lang })
+        body: JSON.stringify({ lang, exams })
       });
 
       if (response.ok) {
