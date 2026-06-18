@@ -241,6 +241,45 @@ export default function TechnicianView({ lang, exams, onStatusChange }: Technici
     const textFr = `Attention s'il vous plaît. Numéro ${codeFr}, veuillez vous présenter à la salle ${resolvedSalleFr}.`;
     const textEn = `Attention please. Patient number ${codeEn}, please proceed to the ${resolvedSalleEn} room.`;
 
+    // Private fallback helper utilizing local browser speechSynthesis (in case of Vercel / serverless 404s)
+    const playLocalFallback = () => {
+      if (!('speechSynthesis' in window)) {
+        console.warn("Speech Synthesis not supported in this browser");
+        return;
+      }
+      window.speechSynthesis.cancel();
+
+      const utteranceFr = new SpeechSynthesisUtterance(textFr);
+      utteranceFr.lang = 'fr-FR';
+      utteranceFr.rate = announcementRate;
+      utteranceFr.pitch = announcementPitch;
+      const matchedFrVoice = availableVoices.find(v => v.voiceURI === selectedFrVoiceURI);
+      if (matchedFrVoice) utteranceFr.voice = matchedFrVoice;
+
+      const utteranceEn = new SpeechSynthesisUtterance(textEn);
+      utteranceEn.lang = 'en-US';
+      utteranceEn.rate = announcementRate * 0.95;
+      utteranceEn.pitch = announcementPitch;
+      const matchedEnVoice = availableVoices.find(v => v.voiceURI === selectedEnVoiceURI);
+      if (matchedEnVoice) utteranceEn.voice = matchedEnVoice;
+
+      if (lang === 'FR') {
+        window.speechSynthesis.speak(utteranceFr);
+        utteranceFr.onend = () => {
+          setTimeout(() => {
+            window.speechSynthesis.speak(utteranceEn);
+          }, 600);
+        };
+      } else {
+        window.speechSynthesis.speak(utteranceEn);
+        utteranceEn.onend = () => {
+          setTimeout(() => {
+            window.speechSynthesis.speak(utteranceFr);
+          }, 600);
+        };
+      }
+    };
+
     // ENGINE 1: Modern Neural Voice Engine (Recommended - Premium Cloud HD Audio)
     if (voiceEngine === 'neural') {
       // Clear physical synthesis to prevent speech overlap
@@ -261,22 +300,47 @@ export default function TechnicianView({ lang, exams, onStatusChange }: Technici
       audioFr.playbackRate = announcementRate;
       audioEn.playbackRate = announcementRate * 0.95;
 
+      let fallbackTriggered = false;
+      const triggerFallbackOnce = (errorMsg: any) => {
+        if (!fallbackTriggered) {
+          fallbackTriggered = true;
+          console.warn("Neural TTS server error/404 detected (commonly on Vercel static deployments). Falling back to browser SpeechSynthesis.", errorMsg);
+          playLocalFallback();
+        }
+      };
+
+      // Set fallback error listeners for 404 / network failures (e.g. on Vercel deployment)
+      audioFr.onerror = () => triggerFallbackOnce("audioFr load/codec issue");
+      audioEn.onerror = () => triggerFallbackOnce("audioEn load/codec issue");
+
       if (lang === 'FR') {
         activeAudioRef.current = audioFr;
-        audioFr.play().catch(err => console.warn("Google Neural TTS Playback failed:", err));
+        audioFr.play().catch(err => {
+          console.warn("Google Neural TTS Playback failed:", err);
+          triggerFallbackOnce(err);
+        });
         audioFr.onended = () => {
           setTimeout(() => {
             activeAudioRef.current = audioEn;
-            audioEn.play().catch(err => console.warn(err));
+            audioEn.play().catch(err => {
+              console.warn("Google Neural TTS Playback failed:", err);
+              triggerFallbackOnce(err);
+            });
           }, 600);
         };
       } else {
         activeAudioRef.current = audioEn;
-        audioEn.play().catch(err => console.warn("Google Neural TTS Playback failed:", err));
+        audioEn.play().catch(err => {
+          console.warn("Google Neural TTS Playback failed:", err);
+          triggerFallbackOnce(err);
+        });
         audioEn.onended = () => {
           setTimeout(() => {
             activeAudioRef.current = audioFr;
-            audioFr.play().catch(err => console.warn(err));
+            audioFr.play().catch(err => {
+              console.warn("Google Neural TTS Playback failed:", err);
+              triggerFallbackOnce(err);
+            });
           }, 600);
         };
       }
@@ -333,6 +397,25 @@ export default function TechnicianView({ lang, exams, onStatusChange }: Technici
       ? "Annonce de test. Numéro I 0 2, veuillez vous présenter à l'IRM."
       : "Test announcement. Number I zero two, please proceed to the MRI.";
 
+    const playLocalTestFallback = () => {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(sampleText);
+      utterance.lang = testLang === 'FR' ? 'fr-FR' : 'en-US';
+      utterance.rate = announcementRate;
+      utterance.pitch = announcementPitch;
+
+      const matchedVoice = availableVoices.find(
+        v => v.voiceURI === (testLang === 'FR' ? selectedFrVoiceURI : selectedEnVoiceURI)
+      );
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
+      }
+      
+      window.speechSynthesis.speak(utterance);
+    };
+
     if (voiceEngine === 'neural') {
       if (activeAudioRef.current) {
         activeAudioRef.current.pause();
@@ -340,7 +423,21 @@ export default function TechnicianView({ lang, exams, onStatusChange }: Technici
       const audio = new Audio(`/api/tts?text=${encodeURIComponent(sampleText)}&lang=${testLang === 'FR' ? 'fr' : 'en'}`);
       audio.playbackRate = announcementRate;
       activeAudioRef.current = audio;
-      audio.play().catch(err => console.warn("Neural TTS Test Playback failed:", err));
+      
+      let fallbackTriggered = false;
+      const triggerFallback = (err: any) => {
+        if (!fallbackTriggered) {
+          fallbackTriggered = true;
+          console.warn("Neural TTS Test failed, falling back to local SpeechSynthesis:", err);
+          playLocalTestFallback();
+        }
+      };
+      
+      audio.onerror = () => triggerFallback("audio error event");
+      audio.play().catch(err => {
+        console.warn("Neural TTS Test Playback failed:", err);
+        triggerFallback(err);
+      });
       return;
     }
 
