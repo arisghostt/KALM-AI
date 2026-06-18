@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@keyframes clignote {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+@keyframes clignote-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.05; }
+}
+
+.animate-clignote {
+  animation: clignote 1.2s infinite ease-in-out;
+}
+
+.animate-clignote-fast {
+  animation: clignote-fast 0.6s infinite ease-in-out;
+}
+
+@keyframes border-blink-red {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 1);
+    box-shadow: inset 0 0 8px rgba(239, 68, 68, 0.25), 0 0 12px rgba(239, 68, 68, 0.25);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.2);
+    box-shadow: inset 0 0 2px rgba(239, 68, 68, 0.05), 0 0 2px rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-border-blink-red {
+  animation: border-blink-red 1s infinite ease-in-out;
+}
+
+@keyframes badge-pulse-red {
+  0%, 100% {
+    transform: scale(1);
+    background-color: #ef4444;
+  }
+  50% {
+    transform: scale(1.08);
+    background-color: #dc2626;
+  }
+}
+
+.animate-badge-pulse-red {
+  animation: badge-pulse-red 0.8s infinite ease-in-out;
+}
+
+/* Elegant clinical custom animations */
+@keyframes flow-wave {
+  0% { stroke-dashoffset: 1000; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-clinical-path {
+  stroke-dasharray: 20, 10;
+  animation: flow-wave 40s linear infinite;
+}

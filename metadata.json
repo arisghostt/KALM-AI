@@ -1,0 +1,6 @@
+{
+  "name": "KALM",
+  "description": "Application intelligente locale de gestion de file d'attente en imagerie médicale pour les hôpitaux de Douala. FIFO Prioritaire Multimodal, Appel vocal bilingue et multi-examens.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
