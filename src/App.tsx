@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Patient, Exam, CallRecord, Language, DICTIONARY, MODALITIES } from './types';
+import { Patient, Exam, CallRecord, Language, DICTIONARY, MODALITIES, SAMPLE_PATIENTS, SAMPLE_EXAMS, SAMPLE_CALLS } from './types';
 import ReceptionView from './components/ReceptionView';
 import TechnicianView from './components/TechnicianView';
 import WaitingRoomView from './components/WaitingRoomView';
@@ -23,39 +23,31 @@ export default function App() {
   const [patients, setPatients] = useState<Patient[]>(() => {
     try {
       const saved = localStorage.getItem('kalm_patients');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved) : SAMPLE_PATIENTS;
     } catch {
-      return [];
+      return SAMPLE_PATIENTS;
     }
   });
   const [exams, setExams] = useState<Exam[]>(() => {
     try {
       const saved = localStorage.getItem('kalm_exams');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved) : SAMPLE_EXAMS;
     } catch {
-      return [];
+      return SAMPLE_EXAMS;
     }
   });
   const [calls, setCalls] = useState<CallRecord[]>(() => {
     try {
       const saved = localStorage.getItem('kalm_calls');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? JSON.parse(saved) : SAMPLE_CALLS;
     } catch {
-      return [];
+      return SAMPLE_CALLS;
     }
   });
   
   // UI preferences
   const [pollingActive, setPollingActive] = useState<boolean>(true);
-  const [isLoading, setIsLoading] = useState<boolean>(() => {
-    try {
-      // If we have cached states, we don't need a full-screen loader blocking the user
-      const savedExams = localStorage.getItem('kalm_exams');
-      return !savedExams;
-    } catch {
-      return true;
-    }
-  });
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const dictionary = DICTIONARY[lang];
 
@@ -68,7 +60,6 @@ export default function App() {
         setPatients(data.patients);
         setExams(data.exams);
         setCalls(data.calls);
-        setIsLoading(false);
         try {
           localStorage.setItem('kalm_patients', JSON.stringify(data.patients));
           localStorage.setItem('kalm_exams', JSON.stringify(data.exams));
@@ -76,10 +67,12 @@ export default function App() {
         } catch {
           // localStorage fails gracefully if disabled
         }
+      } else {
+        console.warn("Backend server not ok", res.status);
       }
     } catch (err) {
       console.warn("Local polling server connection offline", err);
-      // In case of any offline issues, disable blockers so the app remains readable
+    } finally {
       setIsLoading(false);
     }
   };
@@ -102,22 +95,59 @@ export default function App() {
 
   const handlePatientRegistered = (newPatient: Patient, newExams: Exam[]) => {
     // Add locally immediately, will be formalised by the interval poll anyway
-    setPatients(prev => [...prev, newPatient]);
-    setExams(prev => [...prev, ...newExams]);
+    const updatedPatients = [...patients, newPatient];
+    const updatedExams = [...exams, ...newExams];
+    setPatients(updatedPatients);
+    setExams(updatedExams);
+    try {
+      localStorage.setItem('kalm_patients', JSON.stringify(updatedPatients));
+      localStorage.setItem('kalm_exams', JSON.stringify(updatedExams));
+    } catch {}
   };
 
   const handleExamStatusChange = (examId: string, nextStatus: any) => {
-    setExams(prev => prev.map(ex => {
-      if (ex.id === examId) {
-        return {
-          ...ex,
-          status: nextStatus,
-          heureAppel: nextStatus === 'CALLED' ? new Date().toISOString() : ex.heureAppel,
-          heureFin: nextStatus === 'DONE' ? new Date().toISOString() : ex.heureFin
+    let updatedExams: Exam[] = [];
+    setExams(prev => {
+      updatedExams = prev.map(ex => {
+        if (ex.id === examId) {
+          return {
+            ...ex,
+            status: nextStatus,
+            heureAppel: nextStatus === 'CALLED' ? new Date().toISOString() : ex.heureAppel,
+            heureFin: nextStatus === 'DONE' ? new Date().toISOString() : ex.heureFin
+          };
+        }
+        return ex;
+      });
+      try {
+        localStorage.setItem('kalm_exams', JSON.stringify(updatedExams));
+      } catch {}
+      return updatedExams;
+    });
+
+    if (nextStatus === 'CALLED') {
+      const calledExam = exams.find(e => e.id === examId);
+      if (calledExam) {
+        const modObj = MODALITIES.find(m => m.id === calledExam.modalite);
+        const newCall: CallRecord = {
+          id: `call_${Date.now()}`,
+          numeroOrdre: calledExam.numeroOrdre,
+          patientNom: calledExam.patientNom,
+          modalite: calledExam.modalite,
+          salle: modObj ? modObj.salle : "Salle d'examen",
+          lang,
+          heureAppel: new Date().toISOString()
         };
+        setCalls(prev => {
+          const nextCalls = [newCall, ...prev].slice(0, 30);
+          try {
+            localStorage.setItem('kalm_calls', JSON.stringify(nextCalls));
+          } catch {}
+          return nextCalls;
+        });
       }
-      return ex;
-    }));
+    }
+
     // Pull active calls updates immediately
     fetchState();
   };
