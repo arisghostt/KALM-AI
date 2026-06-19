@@ -161,19 +161,89 @@ export default function ReceptionView({ lang, patients, exams, onPatientRegister
     const printContent = document.getElementById(divId);
     if (!printContent) return;
     
-    const originalContent = document.body.innerHTML;
-    const printWindow = window.open('', '', 'height=600,width=400');
-    if (printWindow) {
-      printWindow.document.write('<html><head><title>Impression Ticket</title>');
-      printWindow.document.write('<style>body{font-family:monospace;padding:20px;text-align:center;} .border{border:1px dashed black;padding:15px;margin-bottom:10px;} .btn{display:none;}</style>');
-      printWindow.document.write('</head><body>');
-      printWindow.document.write(printContent.innerHTML);
-      printWindow.document.write('</body></html>');
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
+    // Create or reuse hidden physical printing iframe to prevent aggressive Vercel/Production popup blockers
+    let iframe = document.getElementById('imaging-print-iframe') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'imaging-print-iframe';
+      iframe.style.position = 'absolute';
+      iframe.style.width = '0px';
+      iframe.style.height = '0px';
+      iframe.style.border = 'none';
+      iframe.style.top = '-1000px';
+      iframe.style.left = '-1000px';
+      document.body.appendChild(iframe);
     }
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write('<html><head><title>Impression Ticket Admissions</title>');
+    doc.write('<style>');
+    doc.write(`
+      @media print {
+        @page { size: auto; margin: 15mm 10mm; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+      body {
+        font-family: 'Courier New', Courier, monospace;
+        padding: 15px;
+        color: #000 !important;
+        background: #fff !important;
+        text-align: center;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .font-sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .border { border: 2px dashed #000; padding: 15px; border-radius: 8px; margin-bottom: 12px; }
+      .text-center { text-align: center; }
+      .pb-3 { padding-bottom: 12px; }
+      .border-b { border-bottom: 2px dashed #000; }
+      .font-bold { font-weight: bold !important; }
+      .text-sm { font-size: 13px !important; }
+      .text-2xl { font-size: 24px !important; }
+      .text-5xl { font-size: 44px !important; }
+      .text-6xl { font-size: 54px !important; }
+      .uppercase { text-transform: uppercase; }
+      .py-3 { padding-top: 10px; padding-bottom: 10px; }
+      .pl-4 { padding-left: 15px; }
+      .space-y-1 > * + * { margin-top: 4px; }
+      .space-y-4 > * + * { margin-top: 16px; }
+      .grid { display: grid; }
+      .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .p-4 { padding: 12px; }
+      .rounded-xl { border-radius: 12px; }
+      .bg-slate-950, .bg-slate-900, .bg-slate-100, .bg-slate-50, .bg-slate-50\\/10 {
+        background-color: #fff !important;
+        color: #000 !important;
+        border: 2px solid #000 !important;
+        box-shadow: none !important;
+      }
+      .text-white { color: #000 !important; }
+      /* Hide dynamic actions during native browser routing output */
+      button, .btn, .no-print { display: none !important; }
+    `);
+    doc.write('</style></head><body>');
+    
+    // Copy content and strip action triggers safely
+    const printClone = printContent.cloneNode(true) as HTMLElement;
+    const actionButtons = printClone.querySelectorAll('button');
+    actionButtons.forEach(btn => btn.remove());
+    
+    doc.write(printClone.innerHTML);
+    doc.write('</body></html>');
+    doc.close();
+
+    // Small delay to ensure content loading and styles binding
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.error("Iframe printing trigger failed:", err);
+      }
+    }, 280);
   };
 
   return (
@@ -448,45 +518,62 @@ export default function ReceptionView({ lang, patients, exams, onPatientRegister
                 );
               })()}
 
-              {/* Patient Ticket */}
-              {lastGeneratedExams.map(ex => {
-                const exUrgent = ex.patientPriority === 'P1' || ex.patientPriority === 'P2';
+              {/* Consolidated Patient Ticket (Un seul ticket patient regroupant toutes les modalités) */}
+              {(() => {
+                const isAnyExamUrgent = lastGeneratedExams.some(ex => ex.patientPriority === 'P1' || ex.patientPriority === 'P2');
                 return (
                   <div 
-                    key={ex.id} 
-                    id={`patient-ticket-print-${ex.id}`} 
+                    id="patient-ticket-consolidated-print" 
                     className={`border-2 rounded-xl bg-slate-50/10 dark:bg-slate-950 p-5 text-slate-800 dark:text-slate-200 font-mono text-xs shadow-md transition-all duration-350 ${
-                      exUrgent
+                      isAnyExamUrgent
                         ? 'border-red-500 animate-border-blink-red bg-red-500/[0.01]'
                         : 'border-slate-900 dark:border-slate-700 border-dashed'
                     }`}
                   >
                     <div className="text-center pb-2 border-b border-dashed border-slate-350 dark:border-slate-800">
                       <p className="font-bold text-sm text-slate-950 dark:text-white tracking-wider uppercase flex items-center justify-center gap-1.5">
-                        {exUrgent && <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>}
+                        {isAnyExamUrgent && <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>}
                         <span>{dictionary.ticketPatientTitle}</span>
                       </p>
-                      <p className="text-[10px] text-slate-450 dark:text-slate-400">Gardez ce carton / Please keep this section</p>
+                      <p className="text-[10px] text-slate-450 dark:text-slate-400">Gardez ce carton unique / Please keep this card</p>
                     </div>
                     
-                    <div className="text-center py-4 space-y-3">
-                      <div className={`text-white rounded-2xl py-5 px-8 inline-block shadow-xl border ${
-                        exUrgent
-                          ? 'bg-red-950 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] animate-pulse'
-                          : 'bg-slate-950 dark:bg-slate-900 border-slate-800 dark:border-slate-700'
-                      }`}>
-                        <p className={`text-6xl font-extrabold font-sans tracking-widest leading-none select-none ${exUrgent ? 'text-red-50' : ''}`}>
-                          {ex.numeroOrdre}
-                        </p>
-                        <p className={`text-[11px] uppercase font-mono mt-2 font-extrabold tracking-widest ${exUrgent ? 'text-red-400' : 'text-emerald-400'}`}>
-                          {ex.modalite}
-                        </p>
+                    <div className="text-center py-4 space-y-4">
+                      {/* Grid of codes and modalities */}
+                      <div className={`grid gap-3 justify-center ${lastGeneratedExams.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {lastGeneratedExams.map(ex => {
+                          const exUrgent = ex.patientPriority === 'P1' || ex.patientPriority === 'P2';
+                          return (
+                            <div 
+                              key={ex.id}
+                              className={`text-white rounded-xl py-3 px-4 inline-block border text-center ${
+                                exUrgent
+                                  ? 'bg-red-950 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+                                  : 'bg-slate-950 dark:bg-slate-900 border-slate-800 dark:border-slate-700'
+                              }`}
+                            >
+                              <p className={`text-4xl font-extrabold font-sans tracking-tight leading-none select-none ${exUrgent ? 'text-red-50' : 'text-slate-200 dark:text-white'}`}>
+                                {ex.numeroOrdre}
+                              </p>
+                              <p className={`text-[9px] uppercase font-mono mt-1 font-bold tracking-widest ${exUrgent ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {ex.modalite}
+                              </p>
+                            </div>
+                          );
+                        })}
                       </div>
                       
-                      <div className="space-y-0.5 text-slate-700 dark:text-slate-300">
-                        <p className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-1 rounded inline-block px-3">Dossier: {lastRegisteredPatient.numDossier || 'N/A'}</p>
-                        <p className="text-slate-600 dark:text-slate-400 font-sans text-[11px] pt-2">{dictionary.conserveTicket}</p>
-                        {exUrgent ? (
+                      <div className="space-y-1 text-slate-700 dark:text-slate-300">
+                        <p className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-1 rounded inline-block px-3">
+                          Patient: {lastRegisteredPatient.nom}
+                        </p>
+                        <p className="text-xs">
+                          Dossier ID: <span className="font-bold text-slate-900 dark:text-white uppercase">{lastRegisteredPatient.numDossier || 'N/A'}</span>
+                        </p>
+                        <p className="text-slate-600 dark:text-slate-400 font-sans text-[11px] pt-1">
+                          {dictionary.conserveTicket}
+                        </p>
+                        {isAnyExamUrgent ? (
                           <p className="text-red-600 dark:text-red-400 font-extrabold font-sans text-[11.5px] uppercase animate-pulse">
                             🚨 {lang === 'FR' ? 'URGENCE PRIORITAIRE - VEILLEZ PATIENTER' : 'PRIORITY EMERGENCY - PLEASE WAIT CLOSEBY'}
                           </p>
@@ -497,20 +584,20 @@ export default function ReceptionView({ lang, patients, exams, onPatientRegister
                     </div>
 
                     <div className="pt-2 border-t border-dashed border-slate-300 dark:border-slate-800 text-center text-[10px] text-slate-400">
-                      <p>Douala Med Imaging Queue • {new Date().toLocaleTimeString()}</p>
+                      <p>Douala Med Imaging Queue • {new Date(lastRegisteredPatient.dateCreation).toLocaleTimeString()}</p>
                     </div>
                     
                     <button
                       type="button"
-                      onClick={() => handlePrint(`patient-ticket-print-${ex.id}`)}
-                      className="mt-3 w-full bg-slate-950 dark:bg-slate-800 hover:bg-slate-900 dark:hover:bg-slate-700 text-white py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition"
+                      onClick={() => handlePrint('patient-ticket-consolidated-print')}
+                      className="mt-3 w-full bg-slate-950 dark:bg-slate-800 hover:bg-slate-900 dark:hover:bg-slate-700 text-white py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition animate-bounce-subtle"
                     >
                       <Printer className="w-3 h-3" />
-                      {lang === 'FR' ? `Imprimer Carton ${ex.numeroOrdre}` : `Print Card ${ex.numeroOrdre}`}
+                      {lang === 'FR' ? `Imprimer Carton Unique Patient` : `Print Consolidated Patient Card`}
                     </button>
                   </div>
                 );
-              })}
+              })()}
             </div>
           ) : (
             <div className="h-64 border-2 border-placeholder border-dashed border-slate-200 dark:border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 p-6 text-center">
