@@ -476,7 +476,6 @@ export default function ReceptionView({ lang, patients, exams, onPatientRegister
                     
                     <div className="py-3 space-y-1">
                       <p className="font-semibold text-slate-900 dark:text-white">{dictionary.ticketServiceTitle}</p>
-                      <p><b className="font-semibold text-slate-900 dark:text-white uppercase">Patient:</b> {lastRegisteredPatient.nom}</p>
                       <p><b>Age / Sex:</b> {lastRegisteredPatient.age} ans / {lastRegisteredPatient.sexe}</p>
                       <p><b>Dossier:</b> {lastRegisteredPatient.numDossier}</p>
                       <p><b>Prescripteur:</b> {lastRegisteredPatient.medecinPrescripteur}</p>
@@ -564,9 +563,6 @@ export default function ReceptionView({ lang, patients, exams, onPatientRegister
                       </div>
                       
                       <div className="space-y-1 text-slate-700 dark:text-slate-300">
-                        <p className="text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 py-1 rounded inline-block px-3">
-                          Patient: {lastRegisteredPatient.nom}
-                        </p>
                         <p className="text-xs">
                           Dossier ID: <span className="font-bold text-slate-900 dark:text-white uppercase">{lastRegisteredPatient.numDossier || 'N/A'}</span>
                         </p>
